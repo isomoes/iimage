@@ -1,4 +1,4 @@
-import type { AppSettings, TaskParams } from './types'
+import type { AppSettings, TaskParams } from '../types'
 
 const MIME_MAP: Record<string, string> = {
   png: 'image/png',
@@ -45,6 +45,11 @@ export async function callImageApi(opts: CallApiOptions): Promise<CallApiResult>
   const { settings, prompt, params, inputImageDataUrls } = opts
   const isEdit = inputImageDataUrls.length > 0
   const mime = MIME_MAP[params.output_format] || 'image/png'
+  const requestHeaders = {
+    Authorization: `Bearer ${settings.apiKey}`,
+    'Cache-Control': 'no-store, no-cache, max-age=0',
+    Pragma: 'no-cache',
+  }
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), settings.timeout * 1000)
@@ -76,7 +81,8 @@ export async function callImageApi(opts: CallApiOptions): Promise<CallApiResult>
 
       response = await fetch(buildUrl(settings.baseUrl, 'images/edits'), {
         method: 'POST',
-        headers: { Authorization: `Bearer ${settings.apiKey}` },
+        headers: requestHeaders,
+        cache: 'no-store',
         body: formData,
         signal: controller.signal,
       })
@@ -101,9 +107,10 @@ export async function callImageApi(opts: CallApiOptions): Promise<CallApiResult>
       response = await fetch(buildUrl(settings.baseUrl, 'images/generations'), {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${settings.apiKey}`,
+          ...requestHeaders,
           'Content-Type': 'application/json',
         },
+        cache: 'no-store',
         body: JSON.stringify(body),
         signal: controller.signal,
       })

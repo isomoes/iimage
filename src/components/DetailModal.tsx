@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, removeTask } from '../store'
-import { useCloseOnEscape } from '../useCloseOnEscape'
+import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 
 export default function DetailModal() {
   const tasks = useStore((s) => s.tasks)

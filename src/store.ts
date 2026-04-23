@@ -19,8 +19,10 @@ import {
   deleteImage,
   clearImages,
   storeImage,
-} from './db'
-import { callImageApi } from './api'
+  hashDataUrl,
+} from './lib/db'
+import { callImageApi } from './lib/api'
+import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 
 // ===== Image cache =====
 // 内存缓存，id → dataUrl，避免每次从 IndexedDB 读取
@@ -113,7 +115,11 @@ export const useStore = create<AppState>()(
         set((s) => ({
           inputImages: s.inputImages.filter((_, i) => i !== idx),
         })),
-      clearInputImages: () => set({ inputImages: [] }),
+      clearInputImages: () =>
+        set((s) => {
+          for (const img of s.inputImages) imageCache.delete(img.id)
+          return { inputImages: [] }
+        }),
       setInputImages: (imgs) => set({ inputImages: imgs }),
 
       // Params
@@ -170,15 +176,26 @@ function genId(): string {
   return Date.now().toString(36) + (++uid).toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
-/** 初始化：从 IndexedDB 加载任务和图片缓存 */
+/** 初始化：从 IndexedDB 加载任务和图片缓存，清理孤立图片 */
 export async function initStore() {
   const tasks = await getAllTasks()
   useStore.getState().setTasks(tasks)
 
-  // 预加载所有图片到缓存
+  // 收集所有任务引用的图片 id
+  const referencedIds = new Set<string>()
+  for (const t of tasks) {
+    for (const id of t.inputImageIds || []) referencedIds.add(id)
+    for (const id of t.outputImages || []) referencedIds.add(id)
+  }
+
+  // 预加载所有图片到缓存，同时清理孤立图片
   const images = await getAllImages()
   for (const img of images) {
-    imageCache.set(img.id, img.dataUrl)
+    if (referencedIds.has(img.id)) {
+      imageCache.set(img.id, img.dataUrl)
+    } else {
+      await deleteImage(img.id)
+    }
   }
 }
 
@@ -196,6 +213,11 @@ export async function submitTask() {
   if (!prompt.trim() && !inputImages.length) {
     showToast('请输入提示词或添加参考图', 'error')
     return
+  }
+
+  // 持久化输入图片到 IndexedDB（此前只在内存缓存中）
+  for (const img of inputImages) {
+    await storeImage(img.dataUrl)
   }
 
   const taskId = genId()
@@ -243,7 +265,7 @@ async function executeTask(taskId: string) {
     // 存储输出图片
     const outputIds: string[] = []
     for (const dataUrl of result.images) {
-      const imgId = await storeImage(dataUrl)
+      const imgId = await storeImage(dataUrl, 'generated')
       imageCache.set(imgId, dataUrl)
       outputIds.push(imgId)
     }
@@ -270,6 +292,11 @@ async function executeTask(taskId: string) {
         `生成失败：${err instanceof Error ? err.message : String(err)}`,
         'error',
       )
+  }
+
+  // 释放输入图片的内存缓存（已持久化到 IndexedDB，后续按需从 DB 加载）
+  for (const imgId of task.inputImageIds) {
+    imageCache.delete(imgId)
   }
 }
 
@@ -365,24 +392,60 @@ export async function clearAllData() {
   showToast('所有数据已清空', 'success')
 }
 
-/** 导出数据 */
+/** 从 dataUrl 解析出 MIME 扩展名和二进制数据 */
+function dataUrlToBytes(dataUrl: string): { ext: string; bytes: Uint8Array } {
+  const match = dataUrl.match(/^data:image\/(\w+);base64,/)
+  const ext = match?.[1] ?? 'png'
+  const b64 = dataUrl.replace(/^data:[^;]+;base64,/, '')
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return { ext, bytes }
+}
+
+/** 将二进制数据还原为 dataUrl */
+function bytesToDataUrl(bytes: Uint8Array, filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? 'png'
+  const mimeMap: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' }
+  const mime = mimeMap[ext] ?? 'image/png'
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return `data:${mime};base64,${btoa(binary)}`
+}
+
+/** 导出数据为 ZIP */
 export async function exportData() {
   try {
     const tasks = await getAllTasks()
     const images = await getAllImages()
     const { settings } = useStore.getState()
-    const data: ExportData = {
-      version: 1,
+
+    const imageFiles: ExportData['imageFiles'] = {}
+    const zipFiles: Record<string, Uint8Array> = {}
+
+    for (const img of images) {
+      const { ext, bytes } = dataUrlToBytes(img.dataUrl)
+      const path = `images/${img.id}.${ext}`
+      imageFiles[img.id] = { path, createdAt: img.createdAt, source: img.source }
+      zipFiles[path] = bytes
+    }
+
+    const manifest: ExportData = {
+      version: 2,
       exportedAt: new Date().toISOString(),
       settings,
       tasks,
-      images,
+      imageFiles,
     }
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+
+    zipFiles['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2))
+
+    const zipped = zipSync(zipFiles, { level: 6 })
+    const blob = new Blob([zipped.buffer as ArrayBuffer], { type: 'application/zip' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `gpt-image-playground-${Date.now()}.json`
+    a.download = `gpt-image-playground-${Date.now()}.zip`
     a.click()
     URL.revokeObjectURL(url)
     useStore.getState().showToast('数据已导出', 'success')
@@ -396,16 +459,25 @@ export async function exportData() {
   }
 }
 
-/** 导入数据 */
+/** 导入 ZIP 数据 */
 export async function importData(file: File) {
   try {
-    const text = await file.text()
-    const data: ExportData = JSON.parse(text)
-    if (!data.tasks || !data.images) throw new Error('无效的数据格式')
+    const buffer = await file.arrayBuffer()
+    const unzipped = unzipSync(new Uint8Array(buffer))
 
-    for (const img of data.images) {
-      await putImage(img)
-      imageCache.set(img.id, img.dataUrl)
+    const manifestBytes = unzipped['manifest.json']
+    if (!manifestBytes) throw new Error('ZIP 中缺少 manifest.json')
+
+    const data: ExportData = JSON.parse(strFromU8(manifestBytes))
+    if (!data.tasks || !data.imageFiles) throw new Error('无效的数据格式')
+
+    // 还原图片
+    for (const [id, info] of Object.entries(data.imageFiles)) {
+      const bytes = unzipped[info.path]
+      if (!bytes) continue
+      const dataUrl = bytesToDataUrl(bytes, info.path)
+      await putImage({ id, dataUrl, createdAt: info.createdAt, source: info.source })
+      imageCache.set(id, dataUrl)
     }
 
     for (const task of data.tasks) {
@@ -431,11 +503,11 @@ export async function importData(file: File) {
   }
 }
 
-/** 添加图片到输入（文件上传） */
+/** 添加图片到输入（文件上传）—— 仅放入内存缓存，不写 IndexedDB */
 export async function addImageFromFile(file: File): Promise<void> {
   if (!file.type.startsWith('image/')) return
   const dataUrl = await fileToDataUrl(file)
-  const id = await storeImage(dataUrl)
+  const id = await hashDataUrl(dataUrl)
   imageCache.set(id, dataUrl)
   useStore.getState().addInputImage({ id, dataUrl })
 }

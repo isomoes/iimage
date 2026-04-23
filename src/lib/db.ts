@@ -1,4 +1,4 @@
-import type { TaskRecord, StoredImage } from './types'
+import type { TaskRecord, StoredImage } from '../types'
 
 const DB_NAME = 'gpt-image-playground'
 const DB_VERSION = 1
@@ -112,11 +112,11 @@ function hashDataUrlFallback(dataUrl: string): string {
  * 存储图片，若已存在（按 hash 去重）则跳过。
  * 返回 image id。
  */
-export async function storeImage(dataUrl: string): Promise<string> {
+export async function storeImage(dataUrl: string, source: 'upload' | 'generated' = 'upload'): Promise<string> {
   const id = await hashDataUrl(dataUrl)
   const existing = await getImage(id)
   if (!existing) {
-    await putImage({ id, dataUrl })
+    await putImage({ id, dataUrl, createdAt: Date.now(), source })
   }
   return id
 }

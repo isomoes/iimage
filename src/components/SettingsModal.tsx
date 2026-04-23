@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { normalizeBaseUrl } from '../api'
+import { normalizeBaseUrl } from '../lib/api'
 import { useStore, exportData, importData, clearAllData } from '../store'
 import { DEFAULT_SETTINGS, type AppSettings } from '../types'
-import { useCloseOnEscape } from '../useCloseOnEscape'
+import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 
 export default function SettingsModal() {
   const showSettings = useStore((s) => s.showSettings)
@@ -193,7 +193,7 @@ export default function SettingsModal() {
             <input
               ref={importInputRef}
               type="file"
-              accept=".json"
+              accept=".zip"
               className="hidden"
               onChange={handleImport}
             />
@@ -210,6 +210,11 @@ export default function SettingsModal() {
           >
             清空所有数据
           </button>
+        </div>
+
+        {/* 版本号 */}
+        <div className="pt-4 text-center">
+          <span className="text-[11px] text-gray-300 dark:text-gray-600 select-none">v{__APP_VERSION__}</span>
         </div>
       </div>
     </div>

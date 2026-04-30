@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   model: DEFAULT_IMAGES_MODEL,
   timeout: 300,
   apiMode: 'images',
-  codexCli: false,
+  codexCli: true,
 }
 
 // ===== 任务参数 =====

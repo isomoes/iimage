@@ -19,7 +19,7 @@ This project is based on the original CookSleep/gpt_image_playground. Thanks to 
 
 ### Parameter Controls
 
-- **Smart size picker**: Use `auto`, common ratios with `1K / 2K / 4K`, or custom width and height.
+- **Smart size picker**: Use `auto`, common ratios with `1K / 2K`, or custom width and height.
 - **Automatic normalization**: Custom sizes are normalized to model-compatible limits: width and height are multiples of 16, the longest side is at most `3840px`, aspect ratio is no more than `3:1`, and total pixels are constrained between `655360` and `8294400`.
 - **Preset matching**: The size picker can infer the closest preset from the current dimensions.
 - **Output options**: Configure quality (`low`, `medium`, `high`), output format (`PNG`, `JPEG`, `WebP`), compression level (`0-100`), and moderation level.
@@ -122,7 +122,7 @@ URL query parameters can prefill configuration, which is useful for bookmarks or
 - `?apiUrl=https://api.example.com`
 - `?apiKey=sk-xxxx`
 - `?apiMode=images` or `?apiMode=responses`; default is `images`
-- `?codexCli=true` or `?codexCli=false`; default is disabled, and only `true` enables Codex CLI mode
+- `?codexCli=true` or `?codexCli=false`; default is enabled, and only `false` disables Codex CLI mode
 
 Example:
 

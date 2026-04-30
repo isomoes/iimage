@@ -2,8 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
+import { getDocumentTitle } from './lib/head'
 import { installMobileViewportGuards } from './lib/viewport'
 
+document.title = getDocumentTitle(import.meta.env.DEV)
 installMobileViewportGuards()
 
 if ('serviceWorker' in navigator) {

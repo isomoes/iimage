@@ -2,7 +2,7 @@
 
 iimage is an image generation and editing web app built on OpenAI-compatible image APIs. It provides a clean web UI for text-to-image generation, reference-image editing, visual parameter controls, local history management, and local data import/export.
 
-This project is based on the original [CookSleep/gpt_image_playground](https://github.com/CookSleep/gpt_image_playground). Thanks to the original project and its contributors for the foundation.
+This project is based on the original CookSleep/gpt_image_playground. Thanks to the original project and its contributors for the foundation.
 
 ---
 
@@ -146,5 +146,5 @@ https://your-iimage-deployment.example.com?apiUrl={address}&apiKey={key}
 
 ## Acknowledgements
 
-- Original project: [CookSleep/gpt_image_playground](https://github.com/CookSleep/gpt_image_playground)
+- Original project: CookSleep/gpt_image_playground
 - Community: [LINUX DO](https://linux.do)

@@ -1,6 +1,5 @@
 import type { AppSettings, ImageApiResponse, ResponsesApiResponse, TaskParams } from '../types'
 import { dataUrlToBlob, imageDataUrlToPngBlob, maskDataUrlToPngBlob } from './canvasImage'
-import { buildApiUrl, isApiProxyAvailable, readClientDevProxyConfig } from './devProxy'
 
 const MIME_MAP: Record<string, string> = {
   png: 'image/png',
@@ -11,7 +10,39 @@ const MIME_MAP: Record<string, string> = {
 const MAX_MASK_EDIT_FILE_BYTES = 50 * 1024 * 1024
 const MAX_IMAGE_INPUT_PAYLOAD_BYTES = 512 * 1024 * 1024
 
-export { normalizeBaseUrl } from './devProxy'
+export function normalizeBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim()
+  if (!trimmed) return ''
+
+  const input = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`
+
+  try {
+    const url = new URL(input)
+    const pathSegments = url.pathname.split('/').filter(Boolean)
+    const v1Index = pathSegments.indexOf('v1')
+    const normalizedSegments = v1Index >= 0
+      ? pathSegments.slice(0, v1Index + 1)
+      : pathSegments.length
+        ? [...pathSegments, 'v1']
+        : []
+    const pathname = normalizedSegments.length ? `/${normalizedSegments.join('/')}` : ''
+    return `${url.origin}${pathname}`
+  } catch {
+    return trimmed.replace(/\/+$/, '')
+  }
+}
+
+function buildApiUrl(baseUrl: string, path: string): string {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
+  const endpointPath = path.replace(/^\/+/, '')
+  const apiPath = normalizedBaseUrl.endsWith('/v1')
+    ? endpointPath
+    : ['v1', endpointPath].join('/')
+
+  return normalizedBaseUrl ? `${normalizedBaseUrl}/${apiPath}` : `/${apiPath}`
+}
 
 function isHttpUrl(value: unknown): value is string {
   return typeof value === 'string' && /^https?:\/\//i.test(value)
@@ -282,8 +313,6 @@ async function callImagesApiSingle(opts: CallApiOptions): Promise<CallApiResult>
     : originalPrompt
   const isEdit = inputImageDataUrls.length > 0
   const mime = MIME_MAP[params.output_format] || 'image/png'
-  const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = settings.apiProxy && isApiProxyAvailable(proxyConfig)
   const requestHeaders = createRequestHeaders(settings)
 
   const controller = new AbortController()
@@ -339,7 +368,7 @@ async function callImagesApiSingle(opts: CallApiOptions): Promise<CallApiResult>
         formData.append('mask', maskBlob, 'mask.png')
       }
 
-      response = await fetch(buildApiUrl(settings.baseUrl, 'images/edits', proxyConfig, useApiProxy), {
+      response = await fetch(buildApiUrl(settings.baseUrl, 'images/edits'), {
         method: 'POST',
         headers: requestHeaders,
         cache: 'no-store',
@@ -366,7 +395,7 @@ async function callImagesApiSingle(opts: CallApiOptions): Promise<CallApiResult>
         body.n = params.n
       }
 
-      response = await fetch(buildApiUrl(settings.baseUrl, 'images/generations', proxyConfig, useApiProxy), {
+      response = await fetch(buildApiUrl(settings.baseUrl, 'images/generations'), {
         method: 'POST',
         headers: {
           ...requestHeaders,
@@ -459,8 +488,6 @@ async function callResponsesImageApi(opts: CallApiOptions): Promise<CallApiResul
 async function callResponsesImageApiSingle(opts: CallApiOptions): Promise<CallApiResult> {
   const { settings, prompt, params, inputImageDataUrls } = opts
   const mime = MIME_MAP[params.output_format] || 'image/png'
-  const proxyConfig = readClientDevProxyConfig()
-  const useApiProxy = settings.apiProxy && isApiProxyAvailable(proxyConfig)
   const requestHeaders = createRequestHeaders(settings)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), settings.timeout * 1000)
@@ -482,7 +509,7 @@ async function callResponsesImageApiSingle(opts: CallApiOptions): Promise<CallAp
       tool_choice: 'required',
     }
 
-    const response = await fetch(buildApiUrl(settings.baseUrl, 'responses', proxyConfig, useApiProxy), {
+    const response = await fetch(buildApiUrl(settings.baseUrl, 'responses'), {
       method: 'POST',
       headers: {
         ...requestHeaders,

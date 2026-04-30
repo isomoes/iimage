@@ -9,7 +9,6 @@ export interface AppSettings {
   timeout: number
   apiMode: ApiMode
   codexCli: boolean
-  apiProxy: boolean
 }
 
 const DEFAULT_BASE_URL = import.meta.env.VITE_DEFAULT_API_URL?.trim() || 'https://api.openai.com/v1'
@@ -23,7 +22,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   timeout: 300,
   apiMode: 'images',
   codexCli: false,
-  apiProxy: false,
 }
 
 // ===== 任务参数 =====

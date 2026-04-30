@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { normalizeBaseUrl } from '../lib/api'
-import { isApiProxyAvailable, readClientDevProxyConfig } from '../lib/devProxy'
 import { useStore, exportData, importData, clearAllData } from '../store'
 import { DEFAULT_IMAGES_MODEL, DEFAULT_RESPONSES_MODEL, DEFAULT_SETTINGS, type AppSettings } from '../types'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
@@ -16,18 +15,16 @@ export default function SettingsModal() {
   const [draft, setDraft] = useState<AppSettings>(settings)
   const [timeoutInput, setTimeoutInput] = useState(String(settings.timeout))
   const [showApiKey, setShowApiKey] = useState(false)
-  const apiProxyAvailable = isApiProxyAvailable(readClientDevProxyConfig())
-  const apiProxyEnabled = apiProxyAvailable && draft.apiProxy
 
   const getDefaultModelForMode = (apiMode: AppSettings['apiMode']) =>
     apiMode === 'responses' ? DEFAULT_RESPONSES_MODEL : DEFAULT_IMAGES_MODEL
 
   useEffect(() => {
     if (showSettings) {
-      setDraft(apiProxyAvailable ? settings : { ...settings, apiProxy: false })
+      setDraft(settings)
       setTimeoutInput(String(settings.timeout))
     }
-  }, [apiProxyAvailable, showSettings, settings])
+  }, [showSettings, settings])
 
   const commitSettings = (nextDraft: AppSettings) => {
     const apiMode = nextDraft.apiMode === 'responses' ? 'responses' : DEFAULT_SETTINGS.apiMode
@@ -37,7 +34,6 @@ export default function SettingsModal() {
       apiMode,
       baseUrl: normalizeBaseUrl(nextDraft.baseUrl.trim() || DEFAULT_SETTINGS.baseUrl),
       apiKey: nextDraft.apiKey,
-      apiProxy: apiProxyAvailable ? nextDraft.apiProxy : false,
       model: nextDraft.model.trim() || defaultModel,
       timeout: Number(nextDraft.timeout) || DEFAULT_SETTINGS.timeout,
     }
@@ -140,43 +136,13 @@ export default function SettingsModal() {
                   onChange={(e) => setDraft((prev) => ({ ...prev, baseUrl: e.target.value }))}
                   onBlur={(e) => commitSettings({ ...draft, baseUrl: e.target.value })}
                   type="text"
-                  disabled={apiProxyEnabled}
                   placeholder={DEFAULT_SETTINGS.baseUrl}
-                  className={`w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50 ${apiProxyEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className="w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50"
                 />
                 <div data-selectable-text className="mt-1 min-h-[22px] flex items-center text-[10px] text-gray-400 dark:text-gray-500">
-                  {apiProxyEnabled ? (
-                    <span className="text-yellow-600 dark:text-yellow-500">已开启代理，实际请求目标由部署端决定，此处设置被忽略。</span>
-                  ) : (
-                    <span>支持通过查询参数覆盖：<code className="bg-gray-100 dark:bg-white/[0.06] px-1 py-0.5 rounded">?apiUrl=</code>，<code className="bg-gray-100 dark:bg-white/[0.06] px-1 py-0.5 rounded">codexCli=true</code></span>
-                  )}
+                  <span>支持通过查询参数覆盖：<code className="bg-gray-100 dark:bg-white/[0.06] px-1 py-0.5 rounded">?apiUrl=</code>，<code className="bg-gray-100 dark:bg-white/[0.06] px-1 py-0.5 rounded">codexCli=true</code></span>
                 </div>
               </label>
-
-              {apiProxyAvailable && (
-                <div className="block">
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="block text-xs text-gray-500 dark:text-gray-400">API 代理</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextDraft = { ...draft, apiProxy: !draft.apiProxy }
-                        setDraft(nextDraft)
-                        commitSettings(nextDraft)
-                      }}
-                      className={`relative inline-flex h-3.5 w-6 items-center rounded-full transition-colors ${draft.apiProxy ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                      role="switch"
-                      aria-checked={draft.apiProxy}
-                      aria-label="API 代理"
-                    >
-                      <span className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white shadow transition-transform ${draft.apiProxy ? 'translate-x-[11px]' : 'translate-x-[2px]'}`} />
-                    </button>
-                  </div>
-                  <div data-selectable-text className="text-[10px] text-gray-400 dark:text-gray-500">
-                    由当前部署提供同源代理，用于解决浏览器跨域限制；开启后 API URL 设置会被忽略。
-                  </div>
-                </div>
-              )}
 
               <div className="block">
                 <span className="block text-xs text-gray-500 dark:text-gray-400 mb-1">API Key</span>

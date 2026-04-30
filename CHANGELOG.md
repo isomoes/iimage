@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.19
+## 0.1.0
 
 - Package: Renamed the package to iimage. (@isomoes) b25ee28
 - Development: Switched local development commands to Bun. (@isomoes) b25ee28
